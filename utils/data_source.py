@@ -30,31 +30,36 @@ def get_finmind_data(stock_id, date):
 def get_yahoo_intraday_data(stock_id):
     try:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_id}.TW?interval=1m&range=1d"
+        print(f"🌐 Yahoo API 請求: {url}")
         resp = requests.get(url).json()
 
-        result = resp["chart"]["result"][0]
-        timestamps = result["timestamp"]
-        indicators = result["indicators"]["quote"][0]
+        result = resp.get("chart", {}).get("result", [])[0]
+        timestamps = result.get("timestamp", [])
+        indicators = result.get("indicators", {}).get("quote", [{}])[0]
 
-        if not timestamps:
+        if not timestamps or "close" not in indicators or "volume" not in indicators:
+            print("⚠️ Yahoo 回傳資料不完整")
             return None
 
         latest_idx = -1
         close = indicators["close"][latest_idx]
         volume = indicators["volume"][latest_idx]
-        ts = datetime.datetime.fromtimestamp(timestamps[latest_idx]).strftime('%Y-%m-%d %H:%M')
-
         if close is None or volume is None:
+            print("⚠️ Yahoo 最新筆為 None，跳過")
             return None
+
+        ts = datetime.datetime.fromtimestamp(timestamps[latest_idx]).strftime('%Y-%m-%d %H:%M')
 
         return {
             "close": str(close),
             "volume": str(int(volume / 1000)),  # 單位張（粗略估算）
             "date": ts
         }
+
     except Exception as e:
-        print(f"❌ Yahoo 即時資料解析失敗: {e}")
+        print(f"❌ Yahoo 解析失敗: {e}")
         return None
+
 
 def get_finmind_intraday_data(stock_id):
     token = os.environ['FINMIND_TOKEN']
