@@ -60,7 +60,7 @@ def get_twse_stock_day(stock_id, date):
 def is_close(x, y, tol=0.5):
     return abs(float(x) - float(y)) <= tol
 
-def is_volume_close(x, y, tol=500):  # 容許 500 張誤差
+def is_volume_close(x, y, tol=500):
     return abs(int(float(x)) - int(float(y))) <= tol
 
 def get_verified_stock_data(stock_id, date):
@@ -75,3 +75,19 @@ def get_verified_stock_data(stock_id, date):
         return None
 
     close_prices = [s["close"] for s in sources]
+    volumes = [s["volume"] for s in sources]
+
+    close_ok = all(is_close(cp, close_prices[0]) for cp in close_prices)
+    volume_ok = all(is_volume_close(v, volumes[0]) for v in volumes)
+
+    if close_ok and volume_ok:
+        return sources[0]
+    else:
+        print("❌ 三方資料不一致，略過推播")
+        print("🔍 三方資料來源比較：")
+        print("[FINMIND]     ", sources[0])
+        print("[TWSE_AVG_ALL]", sources[1])
+        print("[TWSE_DAY]    ", sources[2])
+        print("Close prices:", close_prices)
+        print("Volumes:", volumes)
+        return None
