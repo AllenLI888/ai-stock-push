@@ -27,6 +27,35 @@ def get_finmind_data(stock_id, date):
         "date": date
     }
 
+def get_yahoo_intraday_data(stock_id):
+    try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_id}.TW?interval=1m&range=1d"
+        resp = requests.get(url).json()
+
+        result = resp["chart"]["result"][0]
+        timestamps = result["timestamp"]
+        indicators = result["indicators"]["quote"][0]
+
+        if not timestamps:
+            return None
+
+        latest_idx = -1
+        close = indicators["close"][latest_idx]
+        volume = indicators["volume"][latest_idx]
+        ts = datetime.datetime.fromtimestamp(timestamps[latest_idx]).strftime('%Y-%m-%d %H:%M')
+
+        if close is None or volume is None:
+            return None
+
+        return {
+            "close": str(close),
+            "volume": str(int(volume / 1000)),  # 單位張（粗略估算）
+            "date": ts
+        }
+    except Exception as e:
+        print(f"❌ Yahoo 即時資料解析失敗: {e}")
+        return None
+
 def get_finmind_intraday_data(stock_id):
     token = os.environ['FINMIND_TOKEN']
     date = datetime.datetime.now().strftime('%Y-%m-%d')
