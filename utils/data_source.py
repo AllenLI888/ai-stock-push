@@ -70,7 +70,6 @@ def get_yahoo_intraday_data(stock_id):
         return None
 
 
-
 def get_finmind_intraday_data(stock_id):
     token = os.environ['FINMIND_TOKEN']
     date = datetime.datetime.now().strftime('%Y-%m-%d')
