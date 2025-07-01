@@ -27,6 +27,29 @@ def get_finmind_data(stock_id, date):
         "date": date
     }
 
+def get_finmind_intraday_data(stock_id):
+    token = os.environ['FINMIND_TOKEN']
+    date = datetime.datetime.now().strftime('%Y-%m-%d')
+    url = "https://api.finmindtrade.com/api/v4/data"
+    params = {
+        "dataset": "TaiwanStockPriceMinute",
+        "data_id": stock_id,
+        "start_date": date,
+        "token": token,
+    }
+    resp = requests.get(url, params=params).json()
+    if resp["status"] != 200 or not resp["data"]:
+        return None
+    df = pd.DataFrame(resp["data"])
+    if df.empty:
+        return None
+    latest = df.iloc[-1]
+    return {
+        "close": str(latest["close"]),
+        "volume": str(int(latest["Trading_Volume"] / 1000)),  # 分鐘成交量換成張
+        "date": latest["date"] + " " + latest["time"]
+    }
+
 def get_twse_avg_all(stock_id, date):
     date_fmt = date.replace("-", "")
     url = f"https://www.twse.com.tw/exchangeReport/STOCK_DAY_AVG_ALL?response=json&date={date_fmt}"
