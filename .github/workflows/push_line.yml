@@ -1,0 +1,30 @@
+name: Push Stock Info to LINE
+
+on:
+  schedule:
+    - cron: '0 1 * * *'   # 台灣時間 09:00
+    - cron: '0 4 * * *'   # 台灣時間 12:00
+    - cron: '30 7 * * *'  # 台灣時間 15:30
+  workflow_dispatch:      # 手動觸發支援
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run push script
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+        run: python push_stocks.py
