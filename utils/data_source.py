@@ -1,34 +1,10 @@
-# utils/data_source.py
-
 import os
 import datetime
 import requests
 import pandas as pd
 import re
 import json
-
-
-def get_finmind_data(stock_id, date):
-    token = os.environ['FINMIND_TOKEN']
-    url = "https://api.finmindtrade.com/api/v4/data"
-    params = {
-        "dataset": "TaiwanStockPrice",
-        "data_id": stock_id,
-        "start_date": date,
-        "token": token,
-    }
-    resp = requests.get(url, params=params).json()
-    if resp["status"] != 200 or not resp["data"]:
-        return None
-    df = pd.DataFrame(resp["data"])
-    row = df[df["date"] == date]
-    if row.empty:
-        return None
-    return {
-        "close": str(row.iloc[0]["close"]),
-        "volume": str(int(row.iloc[0]["Trading_Volume"] / 1000)),  # 單位張
-        "date": date
-    }
+from datetime import datetime
 
 def get_yahoo_intraday_data(stock_id):
     try:
@@ -44,13 +20,12 @@ def get_yahoo_intraday_data(stock_id):
             print("⚠️ Yahoo 回傳資料不完整")
             return None
 
-        # 從後往前找出最近一筆非 None 的價格
         for i in range(-1, -len(timestamps) - 1, -1):
             close = indicators["close"][i]
             volume = indicators["volume"][i]
             if close is not None and volume is not None:
-                ts = datetime.datetime.fromtimestamp(timestamps[i])
-                now = datetime.datetime.now()
+                ts = datetime.fromtimestamp(timestamps[i])
+                now = datetime.now()
                 diff = now - ts
                 if ts.date() != now.date():
                     print(f"⚠️ 最新資料不是今天 ({ts})，略過")
@@ -73,64 +48,6 @@ def get_yahoo_intraday_data(stock_id):
         return None
 
 
-def get_finmind_intraday_data(stock_id):
-    token = os.environ['FINMIND_TOKEN']
-    date = datetime.datetime.now().strftime('%Y-%m-%d')
-    url = "https://api.finmindtrade.com/api/v4/data"
-    params = {
-        "dataset": "TaiwanStockPriceMinute",
-        "data_id": stock_id,
-        "start_date": date,
-        "token": token,
-    }
-    resp = requests.get(url, params=params).json()
-    if resp["status"] != 200 or not resp["data"]:
-        return None
-    df = pd.DataFrame(resp["data"])
-    if df.empty:
-        return None
-    latest = df.iloc[-1]
-    return {
-        "close": str(latest["close"]),
-        "volume": str(int(latest["Trading_Volume"] / 1000)),  # 分鐘成交量換成張
-        "date": latest["date"] + " " + latest["time"]
-    }
-
-def get_twse_avg_all(stock_id, date):
-    date_fmt = date.replace("-", "")
-    url = f"https://www.twse.com.tw/exchangeReport/STOCK_DAY_AVG_ALL?response=json&date={date_fmt}"
-    resp = requests.get(url).json()
-    if resp.get("stat") != "OK":
-        return None
-    for row in resp["data"]:
-        if row[0] == stock_id:
-            return {
-                "close": row[2].replace(",", ""),
-                "volume": row[1].replace(",", ""),
-                "date": date
-            }
-    return None
-
-def get_twse_stock_day(stock_id, date):
-    yyyymm = date[:7].replace("-", "")
-    url = f"https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date={yyyymm}01&stockNo={stock_id}"
-    resp = requests.get(url).json()
-    if resp.get("stat") != "OK":
-        return None
-    for row in resp["data"]:
-        if row[0].replace("/", "-") == date:
-            return {
-                "close": row[6].replace(",", ""),
-                "volume": row[1].replace(",", ""),
-                "date": date
-            }
-    return None
-
-import re
-import json
-import requests
-from datetime import datetime
-
 def get_xq_intraday_data(stock_id):
     try:
         url = f"https://www.xq.com.tw/stock/{stock_id}"
@@ -140,7 +57,6 @@ def get_xq_intraday_data(stock_id):
         res = requests.get(url, headers=headers, timeout=10)
         html = res.text
 
-        # 解析內嵌 JSON
         pattern = r'root.App.main = (.*?);\n'
         match = re.search(pattern, html)
         if not match:
@@ -150,7 +66,6 @@ def get_xq_intraday_data(stock_id):
         raw_json = json.loads(match.group(1))
         quote = raw_json["context"]["dispatcher"]["stores"]["QuoteSummaryStore"]["price"]
 
-        # 抓價格與時間
         close = quote.get("regularMarketPrice", {}).get("raw")
         ts = quote.get("regularMarketTime", {}).get("raw")
         volume = quote.get("regularMarketVolume", {}).get("raw", 0)
@@ -176,37 +91,16 @@ def get_xq_intraday_data(stock_id):
         return None
 
 
-def is_close(x, y, tol=0.5):
-    return abs(float(x) - float(y)) <= tol
+def get_reliable_intraday_data(stock_id):
+    yahoo_data = get_yahoo_intraday_data(stock_id)
+    if yahoo_data:
+        print(f"✅ 使用 Yahoo 即時資料: {yahoo_data}")
+        return yahoo_data
 
-def is_volume_close(x, y, tol=500):
-    return abs(int(float(x)) - int(float(y))) <= tol
+    xq_data = get_xq_intraday_data(stock_id)
+    if xq_data:
+        print(f"✅ 使用 XQ 即時資料: {xq_data}")
+        return xq_data
 
-def get_verified_stock_data(stock_id, date):
-    sources = [
-        get_finmind_data(stock_id, date),
-        get_twse_avg_all(stock_id, date),
-        get_twse_stock_day(stock_id, date)
-    ]
-
-    if any(s is None for s in sources):
-        print(f"⚠️ 有資料來源缺失: {[s is not None for s in sources]}")
-        return None
-
-    close_prices = [s["close"] for s in sources]
-    volumes = [s["volume"] for s in sources]
-
-    close_ok = all(is_close(cp, close_prices[0]) for cp in close_prices)
-    volume_ok = all(is_volume_close(v, volumes[0]) for v in volumes)
-
-    if close_ok and volume_ok:
-        return sources[0]
-    else:
-        print("❌ 三方資料不一致，略過推播")
-        print("🔍 三方資料來源比較：")
-        print("[FINMIND]     ", sources[0])
-        print("[TWSE_AVG_ALL]", sources[1])
-        print("[TWSE_DAY]    ", sources[2])
-        print("Close prices:", close_prices)
-        print("Volumes:", volumes)
-        return None
+    print(f"❌ Yahoo 和 XQ 都無法取得 {stock_id} 的即時資料")
+    return None
