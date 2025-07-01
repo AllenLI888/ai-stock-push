@@ -29,7 +29,7 @@ def get_finmind_data(stock_id, date):
 
 def get_yahoo_intraday_data(stock_id):
     try:
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_id}.TW?interval=1m&range=1d"
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock_id}.TW?interval=5m&range=1d"
         print(f"🌐 Yahoo API 請求: {url}")
         resp = requests.get(url).json()
 
@@ -41,24 +41,34 @@ def get_yahoo_intraday_data(stock_id):
             print("⚠️ Yahoo 回傳資料不完整")
             return None
 
-        latest_idx = -1
-        close = indicators["close"][latest_idx]
-        volume = indicators["volume"][latest_idx]
-        if close is None or volume is None:
-            print("⚠️ Yahoo 最新筆為 None，跳過")
-            return None
+        # 從後往前找出最近一筆非 None 的價格
+        for i in range(-1, -len(timestamps) - 1, -1):
+            close = indicators["close"][i]
+            volume = indicators["volume"][i]
+            if close is not None and volume is not None:
+                ts = datetime.datetime.fromtimestamp(timestamps[i])
+                now = datetime.datetime.now()
+                diff = now - ts
+                if ts.date() != now.date():
+                    print(f"⚠️ 最新資料不是今天 ({ts})，略過")
+                    return None
+                if diff.total_seconds() > 600:
+                    print(f"⚠️ 最新資料已超過 10 分鐘 ({ts})，略過")
+                    return None
 
-        ts = datetime.datetime.fromtimestamp(timestamps[latest_idx]).strftime('%Y-%m-%d %H:%M')
+                return {
+                    "close": str(close),
+                    "volume": str(int(volume / 1000)),
+                    "date": ts.strftime('%Y-%m-%d %H:%M')
+                }
 
-        return {
-            "close": str(close),
-            "volume": str(int(volume / 1000)),  # 單位張（粗略估算）
-            "date": ts
-        }
+        print("⚠️ 無有效即時資料")
+        return None
 
     except Exception as e:
-        print(f"❌ Yahoo 解析失敗: {e}")
+        print(f"❌ Yahoo 即時資料解析失敗: {e}")
         return None
+
 
 
 def get_finmind_intraday_data(stock_id):
