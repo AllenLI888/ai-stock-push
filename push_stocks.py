@@ -1,6 +1,6 @@
 import os
 import requests
-from utils.data_source import get_reliable_intraday_data
+from utils.data_source import get_twse_closing_data
 
 def predict_price(close_price):
     close = float(close_price)
@@ -12,9 +12,9 @@ def generate_message(stock_id, info):
     suggestion = '✅ 多頭趨勢，可考慮買進' if predict > float(info['close']) else '⚠️ 觀望為宜'
 
     message = (
-        f"📈 股票代號: {stock_id}\n"
-        f"📅 時間: {info['date']}\n"
-        f"💰 最新價格: {info['close']} 元\n"
+        f"📈 股票代號: {stock_id} ({info['name']})\n"
+        f"📅 今日收盤\n"
+        f"💰 收盤價: {info['close']} 元\n"
         f"📊 成交量: {info['volume']} 張\n"
         f"🤖 AI 預測價: {predict} 元\n"
         f"📌 投資建議: {suggestion}\n"
@@ -47,10 +47,10 @@ if __name__ == '__main__':
     stock_ids = ['3062', '3583', '4931', '3625']
     for stock_id in stock_ids:
         print(f"🚀 [分析] 股票代號 {stock_id}...")
-        info = get_reliable_intraday_data(stock_id)
+        info = get_twse_closing_data(stock_id)
         if info:
             message = generate_message(stock_id, info)
             print("✅ 推播訊息如下:\n", message)
             push_line_message(message)
         else:
-            print(f"❌ 無法取得 {stock_id} 的即時資料")
+            print(f"❌ 無法取得 {stock_id} 的收盤資料")
