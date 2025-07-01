@@ -4,6 +4,9 @@ import os
 import datetime
 import requests
 import pandas as pd
+import re
+import json
+
 
 def get_finmind_data(stock_id, date):
     token = os.environ['FINMIND_TOKEN']
@@ -122,6 +125,56 @@ def get_twse_stock_day(stock_id, date):
                 "date": date
             }
     return None
+
+import re
+import json
+import requests
+from datetime import datetime
+
+def get_xq_intraday_data(stock_id):
+    try:
+        url = f"https://www.xq.com.tw/stock/{stock_id}"
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+        res = requests.get(url, headers=headers, timeout=10)
+        html = res.text
+
+        # 解析內嵌 JSON
+        pattern = r'root.App.main = (.*?);\n'
+        match = re.search(pattern, html)
+        if not match:
+            print("⚠️ 無法從 XQ 網頁擷取 JSON 結構")
+            return None
+
+        raw_json = json.loads(match.group(1))
+        quote = raw_json["context"]["dispatcher"]["stores"]["QuoteSummaryStore"]["price"]
+
+        # 抓價格與時間
+        close = quote.get("regularMarketPrice", {}).get("raw")
+        ts = quote.get("regularMarketTime", {}).get("raw")
+        volume = quote.get("regularMarketVolume", {}).get("raw", 0)
+
+        if close is None or ts is None:
+            print("⚠️ XQ 無有效價格或時間資料")
+            return None
+
+        dt = datetime.fromtimestamp(ts)
+        now = datetime.now()
+        if dt.date() != now.date():
+            print(f"⚠️ XQ 資料不是今天（{dt}）")
+            return None
+
+        return {
+            "close": str(close),
+            "volume": str(int(volume / 1000)),
+            "date": dt.strftime('%Y-%m-%d %H:%M')
+        }
+
+    except Exception as e:
+        print(f"❌ XQ 股價解析失敗: {e}")
+        return None
+
 
 def is_close(x, y, tol=0.5):
     return abs(float(x) - float(y)) <= tol
